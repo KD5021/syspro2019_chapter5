@@ -2,6 +2,9 @@
 
 from smbus2 import SMBus
 import time
+import json
+import collections as cl
+from datetime import datetime
 
 bus_number  = 1
 i2c_address = 0x76
@@ -65,11 +68,13 @@ def readData():
 	pres_raw = (data[0] << 12) | (data[1] << 4) | (data[2] >> 4)
 	temp_raw = (data[3] << 12) | (data[4] << 4) | (data[5] >> 4)
 	hum_raw  = (data[6] << 8)  |  data[7]
+	THP=cl.OrderedDict()
+	THP["time"]=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+	THP["temp"]=compensate_T(temp_raw)
+	THP["pres"]=compensate_P(pres_raw)
+	THP["hum"]=compensate_H(hum_raw)
+	return THP
 	
-	compensate_T(temp_raw)
-	compensate_P(pres_raw)
-	compensate_H(hum_raw)
-
 def compensate_P(adc_P):
 	global  t_fine
 	pressure = 0.0
@@ -92,7 +97,9 @@ def compensate_P(adc_P):
 	v2 = ((pressure / 4.0) * digP[7]) / 8192.0
 	pressure = pressure + ((v1 + v2 + digP[6]) / 16.0)  
 
+	
 	print "pressure : %7.2f hPa" % (pressure/100)
+	return round(pressure/100,2)
 
 def compensate_T(adc_T):
 	global t_fine
@@ -101,6 +108,7 @@ def compensate_T(adc_T):
 	t_fine = v1 + v2
 	temperature = t_fine / 5120.0
 	print "temp : %-6.2f ℃" % (temperature) 
+	return round(temperature,2)
 
 def compensate_H(adc_H):
 	global t_fine
@@ -115,7 +123,7 @@ def compensate_H(adc_H):
 	elif var_h < 0.0:
 		var_h = 0.0
 	print "hum : %6.2f ％" % (var_h)
-
+	return round(var_h,2)
 
 def setup():
 	osrs_t = 1			#Temperature oversampling x 1
@@ -134,13 +142,17 @@ def setup():
 	writeReg(0xF4,ctrl_meas_reg)
 	writeReg(0xF5,config_reg)
 
-
+ID=cl.OrderedDict()
+i=0
 while 1:
 	setup()
 	get_calib_param()
 	if __name__ == '__main__':
         	try:
-                	readData()
+                	ID["id"+str(i)]=readData()
+			fw=open('temperature2.json','w')
+			json.dump(ID,fw,indent=4)
+			i+=1
         	except KeyboardInterrupt:
                 	pass
 	print
